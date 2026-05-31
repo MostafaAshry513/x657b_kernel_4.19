@@ -408,7 +408,7 @@ void exit_tasks_rcu_finish(void)
  */
 static void __init rcu_tasks_bootup_oddness(void)
 {
-#if defined(CONFIG_TASKS_RCU) || defined(CONFIG_TASKS_TRACE_RCU)
+#if defined(CONFIG_TASKS_RCU)
 	if (rcu_task_stall_timeout != RCU_TASK_STALL_TIMEOUT)
 		pr_info("\tTasks-RCU CPU stall warnings timeout set to %d (rcu_task_stall_timeout).\n", rcu_task_stall_timeout);
 #endif /* #ifdef CONFIG_TASKS_RCU */
@@ -423,7 +423,7 @@ static void __init rcu_tasks_bootup_oddness(void)
 #endif /* #ifndef CONFIG_TINY_RCU */
 
 
-
+#ifdef CONFIG_TASKS_RCU
 
 // Enqueue a callback for the specified flavor of Tasks RCU.
 static void call_rcu_tasks_generic(struct rcu_head *rhp, rcu_callback_t func,
@@ -570,3 +570,5 @@ void rcu_read_unlock_trace_special(struct task_struct *t)
 		wake_up(&trc_wait);
 }
 EXPORT_SYMBOL_GPL(rcu_read_unlock_trace_special);
+
+#endif /* CONFIG_TASKS_RCU */

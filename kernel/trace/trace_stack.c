@@ -42,7 +42,7 @@ static DEFINE_MUTEX(stack_sysctl_mutex);
 int stack_tracer_enabled;
 static int last_stack_tracer_enabled;
 
-void stack_trace_print(void)
+void stack_trace_print_max(void)
 {
 	long i;
 	int size;
@@ -187,7 +187,7 @@ check_stack(unsigned long ip, unsigned long *stack)
 		stack_dump_trace[x] = ULONG_MAX;
 
 	if (task_stack_end_corrupted(current)) {
-		stack_trace_print();
+		stack_trace_print_max();
 		BUG();
 	}
 
