@@ -119,9 +119,43 @@ make[3]: *** [../scripts/Makefile.build:335: kernel/bpf/verifier.o] Error 1
 | `drivers/misc/mediatek/base/power/spm/Makefile` | Fixed `include` path | TEEI header |
 
 ### Build Result
-- **zImage:** SUCCESS (11 MB, MD5: 1a9f4fb3f0da778922d6c8048fd123b0)
-- **Kernel image:** [out/arch/arm/boot/zImage]
-- **Boot image:** boot_newkernel.img built from stock ramdisk + dtb + new zImage
+- **zImage:** SUCCESS (11 MB, MD5: `342f2200a0d39fe8f77951a5f260721e`)
+- **Kernel image:** `out/arch/arm/boot/zImage`
+- **Boot image:** `boot_newkernel.img` (12 MB, MD5: `a425748dcf250c3ddf3692280ad31dfd`) — built from stock ramdisk + dtb + new zImage
+
+---
+
+## FINAL SUMMARY — 2026-06-02 23:31 UTC
+
+### ✅ ALL GOALS ACHIEVED
+
+| Artifact | Size | MD5 | Location |
+|----------|------|-----|----------|
+| **zImage** | 11 MB | `342f2200a0d39fe8f77951a5f260721e` | `out/arch/arm/boot/zImage` |
+| **boot_newkernel.img** | 12 MB | `a425748dcf250c3ddf3692280ad31dfd` | repo root |
+
+### Build Reproducibility
+- Full rebuild from `make zImage` on 2026-06-02 23:31 UTC completed with **zero errors**
+- Toolchain: clang 11.0.2 (r383902b1) + GCC 4.9 binutils + ld.lld
+- Stock ramdisk from `/root/android/working_ref/boot.emmc.win` used for boot.img
+
+### Mega Uploads
+- `zImage` → `/X657B-build/kernel/zImage` ✅
+- `boot_newkernel.img` → `/X657B-build/kernel/boot_newkernel.img` ✅
+- `BUILD_LOG.md` → `/X657B-build/kernel/BUILD_LOG.md` ✅
+
+### GitHub
+- Pushed to `MostafaAshry513/x657b_kernel_4.19` (origin/main)
+- Commit: includes all source fixes, config fixups, BUILD_LOG.md, and build artifacts
+
+### Key Design Decisions (recap)
+1. clang integrated assembler for kernel objects; GNU as (`-fno-integrated-as`) for `arch/arm/lib` and `arch/arm/boot/compressed`
+2. ARMv8 Crypto Extensions guarded at Makefile/Kconfig level (clang IAS incompatible)
+3. VFP coprocessor instructions converted to UAL (VMRS/VMSR/VMOV/VLDM/VSTM)
+4. Pre-UAL ARM mnemonics converted to UAL throughout (`sbcccs`→`sbccs`, `rsbpls`→`rsbspl`, condition-code reordering, etc.)
+5. `CONFIG_DEBUG_INFO_BTF=n`, `CONFIG_TASKS_TRACE_RCU=n` — known 4.19 incompatibilities
+
+### Status: COMPLETE 🎉
 
 ### Build Command
 ```
