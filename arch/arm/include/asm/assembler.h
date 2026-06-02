@@ -268,6 +268,18 @@
  * CONFIG_THUMB2_KERNEL, you almost certainly need to use
  * ALT_SMP( W(instr) ... )
  */
+#ifdef __clang__
+#define ALT_UP(instr...)					\
+	.pushsection ".alt.smp.init", "a"			;\
+	.long	9998b						;\
+9997:	instr							;\
+	.popsection
+#define ALT_UP_B(label)					\
+	.pushsection ".alt.smp.init", "a"			;\
+	.long	9998b						;\
+	b	label						;\
+	.popsection
+#else
 #define ALT_UP(instr...)					\
 	.pushsection ".alt.smp.init", "a"			;\
 	.long	9998b						;\
@@ -285,6 +297,7 @@
 	.long	9998b						;\
 	W(b)	. + up_b_offset					;\
 	.popsection
+#endif
 #else
 #define ALT_SMP(instr...)
 #define ALT_UP(instr...) instr
@@ -381,7 +394,7 @@ THUMB(	orr	\reg , \reg , #PSR_T_BIT	)
  */
 #ifdef CONFIG_THUMB2_KERNEL
 
-	.macro	usraccoff, instr, reg, ptr, inc, off, cond, abort, t=TUSER()
+	.macro	usraccoff, instr, reg, ptr, inc, off, cond, abort, t
 9999:
 	.if	\inc == 1
 	\instr\()b\t\cond\().w \reg, [\ptr, #\off]
@@ -421,7 +434,7 @@ THUMB(	orr	\reg , \reg , #PSR_T_BIT	)
 
 #else	/* !CONFIG_THUMB2_KERNEL */
 
-	.macro	usracc, instr, reg, ptr, inc, cond, rept, abort, t=TUSER()
+	.macro	usracc, instr, reg, ptr, inc, cond, rept, abort, t
 	.rept	\rept
 9999:
 	.if	\inc == 1
@@ -442,11 +455,11 @@ THUMB(	orr	\reg , \reg , #PSR_T_BIT	)
 #endif	/* CONFIG_THUMB2_KERNEL */
 
 	.macro	strusr, reg, ptr, inc, cond=al, rept=1, abort=9001f
-	usracc	str, \reg, \ptr, \inc, \cond, \rept, \abort
+	usracc	str, \reg, \ptr, \inc, \cond, \rept, \abort, 
 	.endm
 
 	.macro	ldrusr, reg, ptr, inc, cond=al, rept=1, abort=9001f
-	usracc	ldr, \reg, \ptr, \inc, \cond, \rept, \abort
+	usracc	ldr, \reg, \ptr, \inc, \cond, \rept, \abort, 
 	.endm
 
 /* Utility macro for declaring string literals */

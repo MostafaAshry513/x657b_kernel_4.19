@@ -1367,14 +1367,15 @@ static void krait_write_pmresrn(int n, u32 val)
 
 static u32 venum_read_pmresr(void)
 {
-	u32 val;
-	asm volatile("mrc p10, 7, %0, c11, c0, 0" : "=r" (val));
+	register u32 val asm("r0");
+	asm volatile(".inst 0xEE1B00F0" : "=r" (val));
 	return val;
 }
 
 static void venum_write_pmresr(u32 val)
 {
-	asm volatile("mcr p10, 7, %0, c11, c0, 0" : : "r" (val));
+	register u32 r0 asm("r0") = val;
+	asm volatile(".inst 0xEE0B00F0" : : "r" (r0));
 }
 
 static void venum_pre_pmresr(u32 *venum_orig_val, u32 *fp_orig_val)

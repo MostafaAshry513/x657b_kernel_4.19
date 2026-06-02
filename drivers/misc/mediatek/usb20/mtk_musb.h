@@ -57,7 +57,11 @@ extern void usb_phy_context_save(void);
 #endif
 
 /* general USB */
+#ifndef CONFIG_USB_MTK_HDRC
+static inline bool mt_usb_is_device(void) { return false; }
+#else
 extern bool mt_usb_is_device(void);
+#endif
 extern void mt_usb_connect(void);
 extern void mt_usb_disconnect(void);
 extern void mt_usb_reconnect(void);

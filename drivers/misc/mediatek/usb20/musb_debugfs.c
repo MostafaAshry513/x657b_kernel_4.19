@@ -664,6 +664,8 @@ void /* __init_or_exit */ musb_exit_debugfs(struct musb *musb)
 	}
 }
 
+#ifdef CONFIG_MTK_MUSB_DUAL_ROLE
+
 static int musb_mode_show(struct seq_file *sf, void *unused)
 {
 	struct musb *musb = sf->private;
@@ -774,3 +776,11 @@ void musb_dr_debugfs_init(struct musb *musb)
 	proc_dr_files[idx++] = proc_create_data(PROC_FILE_VBUS, 0644,
 			NULL, &musb_vbus_fops, musb);
 }
+
+#else
+
+void musb_dr_debugfs_init(struct musb *musb)
+{
+}
+
+#endif

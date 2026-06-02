@@ -133,7 +133,7 @@ static int umd_setup(struct subprocess_info *info, struct cred *new)
 	set_fs_pwd(current->fs, &umd_info->wd);
 	umd_info->pipe_to_umh = to_umh[1];
 	umd_info->pipe_from_umh = from_umh[0];
-	umd_info->tgid = get_pid(task_tgid(current));
+	umd_info->tgid = get_pid(task_pid(current->group_leader));
 	current->flags |= PF_UMH;
 	return 0;
 }
@@ -206,7 +206,7 @@ EXPORT_SYMBOL_GPL(fork_usermode_driver);
 void __exit_umh(struct task_struct *tsk)
 {
 	struct umd_info *info;
-	struct pid *tgid = task_tgid(tsk);
+	struct pid *tgid = task_pid(tsk->group_leader);
 
 	mutex_lock(&umh_list_lock);
 	list_for_each_entry(info, &umh_list, list) {

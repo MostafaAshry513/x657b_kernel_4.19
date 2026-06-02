@@ -28,6 +28,9 @@
 #include <linux/socket.h>
 #include <linux/sock_diag.h>
 #include <linux/in.h>
+#ifndef compat_ptr
+#define compat_ptr(ptr) (ptr)
+#endif
 #include <linux/inet.h>
 #include <linux/netdevice.h>
 #include <linux/if_packet.h>

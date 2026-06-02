@@ -520,11 +520,11 @@ __und_usr_thumb:
  */
 	.arch	armv6t2
 #endif
-2:	ldrht	r5, [r4]
+2:	.inst	0xe0b450b0			@ ldrht r5, [r4]
 ARM_BE8(rev16	r5, r5)				@ little endian instruction
 	cmp	r5, #0xe800			@ 32bit instruction if xx != 0
 	blo	__und_usr_fault_16_pan		@ 16bit undefined instruction
-3:	ldrht	r0, [r2]
+3:	.inst	0xe0b200b0			@ ldrht r0, [r2]
 ARM_BE8(rev16	r0, r0)				@ little endian instruction
 	uaccess_disable ip
 	add	r2, r2, #2			@ r2 is PC + 2, make it PC + 4
@@ -863,7 +863,7 @@ __kuser_cmpxchg64:				@ 0xffff0f60
 	smp_dmb	arm
 1:	ldrexd	r0, r1, [r2]			@ load current val
 	eors	r3, r0, r4			@ compare with oldval (1)
-	eoreqs	r3, r1, r5			@ compare with oldval (2)
+	eorseq	r3, r1, r5			@ compare with oldval (2)
 	strexdeq r3, r6, r7, [r2]		@ store newval if eq
 	teqeq	r3, #1				@ success?
 	beq	1b				@ if no then retry
@@ -887,7 +887,7 @@ __kuser_cmpxchg64:				@ 0xffff0f60
 	ldmia	r1, {r6, lr}			@ load new val
 1:	ldmia	r2, {r0, r1}			@ load current val
 	eors	r3, r0, r4			@ compare with oldval (1)
-	eoreqs	r3, r1, r5			@ compare with oldval (2)
+	eorseq	r3, r1, r5			@ compare with oldval (2)
 2:	stmeqia	r2, {r6, lr}			@ store newval if eq
 	rsbs	r0, r3, #0			@ set return val and C flag
 	ldmfd	sp!, {r4, r5, r6, pc}

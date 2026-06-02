@@ -50,7 +50,7 @@ UNWIND( .save {r8, lr}      )
 	stmgeia	ip!, {r1, r3, r8, lr}
 	stmgeia	ip!, {r1, r3, r8, lr}
 	bgt	2b
-	ldmeqfd	sp!, {r8, pc}		@ Now <64 bytes to go.
+	ldmfdeq	sp!, {r8, pc}		@ Now <64 bytes to go.
 /*
  * No need to correct the count; we're only testing bits from now on
  */
@@ -98,7 +98,7 @@ UNWIND( .save {r4-r8, lr}      )
 	stmgeia	ip!, {r1, r3-r8, lr}
 	stmgeia	ip!, {r1, r3-r8, lr}
 	bgt	3b
-	ldmeqfd	sp!, {r4-r8, pc}
+	ldmfdeq	sp!, {r4-r8, pc}
 
 	tst	r2, #32
 	stmneia	ip!, {r1, r3-r8, lr}
