@@ -275,3 +275,72 @@ python3 /root/android/lineage/system/tools/mkbootimg/mkbootimg.py \
 ```
 
 ### Status: AWAITING TEST — cannot flash; orchestrator will report which candidate boots.
+
+---
+
+## 2026-06-03 STOCK CONFIG MERGE (BOOT FIX ATTEMPT)
+
+### Boot Test Result for Candidate A
+- **Candidate A booted!** Kernel + all HW drivers + services (zygote, surfaceflinger, audioserver,
+  vold, adbd) all started successfully.
+- **BUT:** Android framework never sets `sys.boot_completed`. At ~116s a boot-failure watchdog
+  triggers `/system/bin/reboot bootloader` → bootloop.
+- **Diagnosis:** DTB was fine. Kernel is missing config options the Android framework requires.
+
+### Stock Config Extraction
+```bash
+scripts/extract-ikconfig /root/android/kernel_backup/stock_kernel_zImage > /tmp/stock.config
+```
+- Stock kernel: Linux/arm 4.19.127 (5468 lines)
+- Our kernel: Linux/arm 4.19.325
+
+### Config Merge Strategy
+1. Copied stock.config to `out/.config`
+2. Ran `make olddefconfig` to fill in new 4.19.325 options with defaults
+3. Disabled build-breaking options:
+   - `CONFIG_CRYPTO_AES_ARM_CE=n`, `CONFIG_CRYPTO_SHA2_ARM_CE=n` (clang IAS incompatible)
+   - `CONFIG_USB_MTK_HDRC=n` (struct mismatch: `mt_usb_glue.phy` doesn't exist)
+   - `CONFIG_TASKS_TRACE_RCU=n` (known 4.19 incompatibility)
+4. Fixed `CONFIG_MICROTRUST_TEE_VERSION="400"` (version 300 dir doesn't exist in tree)
+5. `CONFIG_CUSTOM_KERNEL_LCM=""` and `CONFIG_CUSTOM_KERNEL_IMGSENSOR="s5k3l6_mipi_raw"`
+   (stock's LCM/sensor drivers don't exist in this tree)
+6. Fixed `drivers/misc/mediatek/usb20/musb_debugfs.c`: added `__maybe_unused` to
+   `proc_dr_files` (unused when `CONFIG_MTK_MUSB_DUAL_ROLE` is not set)
+
+### Android-Critical Config Comparison (stock vs our merged config)
+All of these are **identical** between stock and our config:
+| Category | Options |
+|----------|---------|
+| CGROUPS | `CGROUPS`, `CGROUP_CPUACCT`, `CGROUP_FREEZER`, `CGROUP_SCHED`, `CPUSETS`, `CGROUP_BPF` |
+| SCHED | `FAIR_GROUP_SCHED`, `SCHEDSTATS`, `UCLAMP_TASK` |
+| MEMORY | `MEMCG`, `MEMCG_SWAP`, `BLK_CGROUP`, `CGROUP_WRITEBACK` |
+| ANDROID | `ANDROID`, `BINDER_IPC`, `ASHMEM` |
+| FS | `FUSE_FS`, `SDCARD_FS`, `OVERLAY_FS`, `QUOTA`, `QFMT_V2`, `TMPFS_POSIX_ACL` |
+| NET | `NETFILTER`, `NF_CONNTRACK`, `IP_NF_IPTABLES`, `IP6_NF_IPTABLES` |
+| SECURITY | `SELINUX`, `DM_VERITY`, `ION`, `PSI` |
+
+### Config Options Missing from Our Tree (Stock Kconfig Not Present)
+These exist in stock 4.19.127 but their Kconfig definitions are **absent** in our 4.19.325 tree:
+- `CONFIG_DUAL_ROLE_USB_INTF`, `CONFIG_DM_ANDROID_VERITY_AT_MOST_ONCE_DEFAULT_ENABLED`
+- `CONFIG_PROCESS_RECLAIM`, `CONFIG_TRAN_FREEZE`, `CONFIG_F2FS_FS_EP01`
+- All `CONFIG_TRAN_*` (TranSSION vendor hooks), `CONFIG_CUSTOM_TRAN_*`
+- `CONFIG_MTK_MUSB_QMU_*`, `CONFIG_MTK_SENSORS_1_0`, `CONFIG_MTK_MEM`
+- `CONFIG_SPECULATIVE_PAGE_FAULT`, `CONFIG_REVERSE_BUDDY`, `CONFIG_ARK`
+
+These were silently dropped by `olddefconfig` — they cannot be enabled without the
+corresponding source code in this kernel tree.
+
+### New zImage (Stock-Merged Config)
+- **zImage MD5:** `02441b8730f9541b74ce3c1a3fe63d73`
+- **Build:** Clean, zero errors
+- **Source fix:** `drivers/misc/mediatek/usb20/musb_debugfs.c` — `__maybe_unused` on `proc_dr_files`
+
+### Candidate B: Boot_B_Config
+- **File:** `boot_candidates/boot_B_config.img` (11.2 MB)
+- **MD5:** `23d427d7eceea87acb9ea90ec47001af`
+- **Approach:** Stock-based config merged via olddefconfig + header v2 + mt6761.dtb
+- **Params:** Same mkbootimg settings as Candidate A
+- **DTB:** `mt6761.dtb` (MD5: `548ab522983313a4842140df281c3c79`)
+- **Ramdisk:** Stock from `boot.emmc.win`
+
+### Status: AWAITING TEST — orchestrator will flash & report.

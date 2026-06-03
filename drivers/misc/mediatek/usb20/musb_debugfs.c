@@ -38,7 +38,7 @@ static struct proc_dir_entry *proc_files[PROC_FILE_NUM] = {
 #define PROC_FILE_VBUS "mtk_usb/vbus"
 
 #define PROC_FILE_DR_NUM 2
-static struct proc_dir_entry *proc_dr_files[PROC_FILE_DR_NUM] = {
+static struct proc_dir_entry *proc_dr_files[PROC_FILE_DR_NUM] __maybe_unused = {
 	NULL, NULL};
 
 struct musb_register_map {
