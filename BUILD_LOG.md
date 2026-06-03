@@ -169,3 +169,16 @@ make -j$(nproc) O=out ARCH=arm CC=clang CLANG_TRIPLE=arm-linux-gnueabi- \
 1. Used clang's integrated assembler for kernel objects (the goal); GNU as (`-fno-integrated-as`) for arch/arm/lib and arch/arm/boot/compressed where legacy ARM mnemonics are too numerous.
 2. Disabled ARMv8 Crypto Extensions (*.ce) at Makefile level — these perlasm-generated .S files use instructions clang IAS doesn't support.
 3. Converted VFP coprocessor instructions (MRC/MCR p10, MCRR/MRRC p11) to UAL VMRS/VMSR/VMOV/VLDM/VSTM throughout.
+
+## 2026-06-03 BOOT TEST RESULT: builds ✅ but does NOT boot ❌
+- zImage (4.19.325-cip124-st8, md5 342f2200) packed into a standard ANDROID! header-v2 boot.img with
+  mkbootimg (base 0x40000000, kernel_off 0x8000, ramdisk_off 0x11b00000, tags/dtb_off 0x7880000,
+  cmdline "bootopt=64S3,32S1,32S1 buildvariant=user", stock dtb + Magisk ramdisk) -> boot_newk_server.img.
+- Flashed via fastboot. Device HANGS pre-userspace: no adb, no display, eventually bootloops. Stock
+  4.19.127 boots fine. So the bengris32 4.19.325 tree compiles but isn't bootable as-is on this hardware
+  (DTB/driver/config mismatch vs the device's stock kernel). Restored stock boot (dd, md5 57e6f9de).
+- NOTE: magiskboot repack produced a stock-identical image (didn't swap the kernel); mkbootimg on the
+  server worked (verified embedded kernel md5 == new zImage). Use mkbootimg, not magiskboot, for this device.
+- NEXT (future): the kernel needs the device's stock kernel config/DTB + MTK-specific drivers to boot;
+  building from the *device's own* kernel source/defconfig (not generic CIP 4.19.325) is the path. Not
+  needed for the ROM (stock boot works).
