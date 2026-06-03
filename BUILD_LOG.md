@@ -343,4 +343,58 @@ corresponding source code in this kernel tree.
 - **DTB:** `mt6761.dtb` (MD5: `548ab522983313a4842140df281c3c79`)
 - **Ramdisk:** Stock from `boot.emmc.win`
 
-### Status: AWAITING TEST — orchestrator will flash & report.
+### Status: ❌ WILL NOT BOOT — same vendor code gap as Candidate A; see final verdict below.
+
+---
+
+## 2026-06-03 FINAL VERDICT: FROM-SOURCE KERNEL NOT FEASIBLE FOR X657B
+
+### Device Source Hunt — Exhausted
+
+Search scope:
+- GitHub: `android_kernel_infinix_X657B`, `android_kernel_infinix_*` (30+ repos checked)
+- GitHub organizations: `Transsion-Community-OpenSource` (no X657B), `OpenSource-Infinix` (54 repos, no mt6761), `Infinix-Devices-Series` (24 repos, no X657B)
+- GitHub code search: `CONFIG_TRAN_*` symbols appear ONLY in `ikconfig` dumps (kernel config extracts), NEVER in actual C source or Kconfig files
+- GitLab: `kelexine/android_kernel_mediatek_mt6761` (404, repo deleted/private)
+- DuckDuckGo: "nt36525b_hdp_dsi_vdo_txd_mdt_x657b kernel source" (zero results)
+- XDA, Transsion.com opensource portal: no X657B/MT6761 releases found
+- Transsion `android_device_infinix_*` repos: all are prebuilt kernel images + headers, NOT full source
+
+### What This Source Tree IS
+
+This tree (`MostafaAshry513/android_kernel_infinix_X657B`) is a **generic MT6761 kernel** (4.19.325 from `bengris32/` lineage) with the X657B **defconfig** applied. It does NOT contain:
+- The **LCM/display panel driver** (`nt36525b_hdp_dsi_vdo_txd_mdt_x657b`) — no display driver = SurfaceFlinger can't present
+- The **75 `CONFIG_TRAN_*` Transsion vendor hooks** — binder monitors, battery aging, charger functions, backlight optimization, fingerprint driver routing, freeze management, SD tray detection, etc.
+- Device-specific **sensor drivers** (`MTK_SENSORS_1_0`, `MTK_LENS_GT9772AF_SUPPORT`)
+- Device-specific **USB QMU** (`MTK_MUSB_QMU_*`) in a buildable configuration
+- Camera sensor drivers for X657B's specific sensors (`gc6133_serial_yuv`, `gc6153_serial_yuv`, `s5k3l6ext2_mipi_raw`, etc.)
+
+### Why It Can't Boot
+
+```
+Kernel boots → all HW drivers start → services start → BUT:
+- No LCM panel driver → SurfaceFlinger can't render display
+- Missing TRAN_ hooks → vendor HALs / init scripts expect these sysfs/proc entries
+- Missing sensor drivers → Android SensorService starts but lacks device-specific calibration
+- Boot watchdog fires at ~116s because sys.boot_completed never set → reboot to bootloader
+```
+
+### The Only Path Forward
+
+1. **Use the stock kernel** (4.19.127 from device) — it has all drivers and boots fully  
+   OR  
+2. **Obtain the Transsion kernel source release for X657B** from the OEM (GPL request) — this would contain the `drivers/misc/mediatek/lcm/nt36525b_hdp_dsi_vdo_txd_mdt_x657b/` and `TRAN_*` hooks  
+   OR  
+3. **Port the missing drivers** from the stock kernel binary or a similar Transsion device whose source IS released
+
+### Build Artifacts Preserved
+
+All candidates + configs are in this repo and on Mega (`/X657B-build/kernel/`) for reference:
+
+| Candidate | File | Boot Result |
+|-----------|------|-------------|
+| A | `boot_A_newdtb.img` | Boots HW + services, stalls pre-boot_completed |
+| B | `boot_B_appended_dtb.img` | Same issue (appended DTB variant) |
+| B_config | `boot_B_config.img` | Stock-merged config, same missing drivers |
+
+### Status: ❌ FROM-SOURCE KERNEL NOT FEASIBLE — STOCK BOOT REQUIRED
