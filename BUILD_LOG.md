@@ -182,3 +182,96 @@ make -j$(nproc) O=out ARCH=arm CC=clang CLANG_TRIPLE=arm-linux-gnueabi- \
 - NEXT (future): the kernel needs the device's stock kernel config/DTB + MTK-specific drivers to boot;
   building from the *device's own* kernel source/defconfig (not generic CIP 4.19.325) is the path. Not
   needed for the ROM (stock boot works).
+
+---
+
+## 2026-06-03 DTB BUILD & BOOT CANDIDATES
+
+### Root Cause Analysis
+- `make dtbs` produces **zero** `.dtb` files — MediaTek (MT6761) DTBs are built via the Android
+  platform build system (`device/mediatek/build/core/build_dtbimage.mk`), not the upstream
+  kernel `arch/arm/boot/dts/Makefile`.
+- The stock boot image (`boot.emmc.win`) has **dtb_size=0** in header — no DTB embedded.
+  The actual device DTB lives in a separate partition (`/dev/block/platform/bootdevice/by-name/dtb`).
+- Previous boot attempt used the **stock DTB** (from device) with the **new kernel** (4.19.325) → mismatch → no boot.
+
+### Fix: Build mt6761.dtb from Source
+```
+cd /root/android/kernel_x657b
+gcc -E -nostdinc -x assembler-with-cpp \
+  -I out/include -I arch/arm/boot/dts -I arch/arm/boot/dts/include \
+  -I include -I arch/arm/include -I . -undef -D__DTS__ \
+  -o /tmp/mt6761.dts.tmp arch/arm/boot/dts/mt6761.dts
+dtc -I dts -O dtb -o out/arch/arm/boot/dts/mt6761.dtb /tmp/mt6761.dts.tmp
+```
+- **DTB:** `out/arch/arm/boot/dts/mt6761.dtb` (86 KB, FDT magic 0xd00dfeed verified)
+- **MD5:** `548ab522983313a4842140df281c3c79`
+
+### .config vs Stock Defconfig Comparison
+| Config | Current .config | Stock defconfig | Match? |
+|--------|-----------------|-----------------|--------|
+| `CONFIG_ARM_APPENDED_DTB` | not set / y (candidate B) | not set | ✓ (A) |
+| `CONFIG_MACH_MT6761` | y | y | ✓ |
+| `CONFIG_MTK_PLATFORM` | `"mt6761"` | `"mt6761"` | ✓ |
+| `CONFIG_ARCH_MTK_PROJECT` | `"x657b_h6117"` | `"x657b_h6117"` | ✓ |
+| `CONFIG_CMDLINE` | `""` | `""` | ✓ |
+| `CONFIG_INITRAMFS_SOURCE` | `""` | `""` | ✓ |
+
+No boot-critical config differences found.
+
+### Boot Candidates
+
+#### Candidate A: New mt6761.dtb as separate DTB (header v2)
+- **File:** `boot_candidates/boot_A_newdtb.img` (11 MB)
+- **MD5:** `f89a4a546ce62a6105f666c250e38180`
+- **Approach:** Standard header v2 with `--dtb out/arch/arm/boot/dts/mt6761.dtb`
+- **Config:** `CONFIG_ARM_APPENDED_DTB=n` (default)
+- **zImage MD5:** `342f2200a0d39fe8f77951a5f260721e`
+- **DTB MD5:** `548ab522983313a4842140df281c3c79`
+
+#### Candidate B: Appended DTB (header v1)
+- **File:** `boot_candidates/boot_B_appended_dtb.img` (11 MB)
+- **MD5:** `1aa825218f8d8cd41e548649ba5f0033`
+- **Approach:** `cat zImage mt6761.dtb > zImage-dtb`, packed as kernel with header v1
+- **Config:** `CONFIG_ARM_APPENDED_DTB=y` (kernel rebuilt with this enabled)
+- **zImage-dtb MD5:** `1088a62f2b6b6e64571a5a0d014c888a`
+
+#### Candidate B Kernel Rebuild
+Kernel rebuilt with `CONFIG_ARM_APPENDED_DTB=y` after `make olddefconfig`:
+```
+make O=out ARCH=arm CC=clang CLANG_TRIPLE=arm-linux-gnueabi- \
+     CROSS_COMPILE=arm-linux-androideabi- LD=ld.lld zImage
+```
+- zImage builds cleanly, zero errors.
+
+### Ramdisk
+Extracted from stock `boot.emmc.win` (header v2, kernel_size=10548720, ramdisk_size=943311, page_size=2048)
+→ `/tmp/bu/ramdisk` (921 KB)
+
+### Build Command for Candidates
+```bash
+# Candidate A (header v2 + separate dtb)
+python3 /root/android/lineage/system/tools/mkbootimg/mkbootimg.py \
+  --header_version 2 --pagesize 2048 --base 0x40000000 \
+  --kernel_offset 0x00008000 --ramdisk_offset 0x11b00000 \
+  --tags_offset 0x07880000 --dtb_offset 0x07880000 \
+  --os_version 11.0.0 --os_patch_level 2022-11 \
+  --board CY-X657B-H6117-D \
+  --cmdline "bootopt=64S3,32S1,32S1 buildvariant=user" \
+  --kernel out/arch/arm/boot/zImage --ramdisk /tmp/bu/ramdisk \
+  --dtb out/arch/arm/boot/dts/mt6761.dtb \
+  -o boot_candidates/boot_A_newdtb.img
+
+# Candidate B (header v1 + appended dtb)
+cat out/arch/arm/boot/zImage out/arch/arm/boot/dts/mt6761.dtb > boot_candidates/zImage-dtb
+python3 /root/android/lineage/system/tools/mkbootimg/mkbootimg.py \
+  --header_version 1 --pagesize 2048 --base 0x40000000 \
+  --kernel_offset 0x00008000 --ramdisk_offset 0x11b00000 \
+  --tags_offset 0x07880000 --os_version 11.0.0 --os_patch_level 2022-11 \
+  --board CY-X657B-H6117-D \
+  --cmdline "bootopt=64S3,32S1,32S1 buildvariant=user" \
+  --kernel boot_candidates/zImage-dtb --ramdisk /tmp/bu/ramdisk \
+  -o boot_candidates/boot_B_appended_dtb.img
+```
+
+### Status: AWAITING TEST — cannot flash; orchestrator will report which candidate boots.
