@@ -398,3 +398,59 @@ All candidates + configs are in this repo and on Mega (`/X657B-build/kernel/`) f
 | B_config | `boot_B_config.img` | Stock-merged config, same missing drivers |
 
 ### Status: ❌ FROM-SOURCE KERNEL NOT FEASIBLE — STOCK BOOT REQUIRED
+
+---
+
+## 2026-06-04 LCM PANEL DRIVER PORT — MAJOR BREAKTHROUGH!
+
+### Source Found: Vivo Y81 Kernel (4.9.77)
+- **Repo:** `DavidWithTuxedo/android_kernel_vivo_y81` (MT6761/MT6765 platform)
+- **Panel driver:** `drivers/misc/mediatek/lcm/nt36525_hdp_dsi_vdo_txd_lm3697_622/`
+  — NT36525 TXD panel, HDP resolution, 3-lane DSI, video mode
+- **Also found:** Nokia MT6771 (`nt36525_hdplus_dsi_vdo_tianma_rt5081`),
+  Oppo A3 (`oppo17101_boe_nt36525_720p_dsi_vdo`) — all in MTK lcm framework
+
+### Port Summary
+The Y81 panel driver was ported into our 4.19 tree under:
+`drivers/misc/mediatek/lcm/nt36525b_hdp_dsi_vdo_txd_mdt_x657b/`
+
+**API adaptations (4.9 → 4.19):**
+| 4.9 API | 4.19 Equivalent |
+|---------|----------------|
+| `lcm_reset_setting(n)` | `SET_RESET_PIN(n)` → `lcm_util.set_reset_pin()` |
+| `lcm_vddi_setting(n)` | Removed (bootloader handles voltages) |
+| `lcm_enp_setting(n)` | Removed |
+| `lcm_enn_setting(n)` | Removed |
+| `dsi_set_hs_test(n)` | Removed (HS mode auto-negotiated in 4.19) |
+| `.get_id`, `.lcm_cabc_open/close`, `.lcm_reset` | Removed (not in 4.19 `LCM_DRIVER` struct) |
+| Vivo globals (`panel_reset_state`, `phone_shutdown_state`) | Removed (Vivo-specific) |
+| CABC functions (`cabc_push_table`, `lcm_cabc_vivo_*`) | Removed (unused) |
+
+**Preserved:**
+- Full panel init sequence (DSI command tables)
+- `lcm_get_params()` — timing, resolution, PLL clock (362 MHz)
+- `lcm_compare_id()` — panel identification
+- `lcm_init()` — reset sequence + init commands
+- `lcm_setbacklight_cmdq()` / `lcm_setbacklight()` — backlight control
+- `lcm_update()` — partial update support
+
+### Build
+- **zImage:** `out/arch/arm/boot/zImage` (10.2 MB, MD5: `ed6531e804bf7415fa2cfe05f2391bf8`)
+- **Config:** `CONFIG_CUSTOM_KERNEL_LCM="nt36525b_hdp_dsi_vdo_txd_mdt_x657b"`
+- **Build errors fixed:** 0 remaining — clean build with clang IAS
+
+### Candidate C: Boot_C_LCM
+- **File:** `boot_candidates/boot_C_lcm.img` (11.2 MB)
+- **MD5:** `062294031caf668c0df8b1a962aae52c`
+- **Approach:** Header v2 + mt6761.dtb + nt36525b LCM driver (ported from Vivo Y81)
+- **What's new:** This is the **FIRST build with an actual LCM panel driver** —
+  the kernel now has code to initialize the NT36525 display panel
+- **Known gaps:** TRAN_* vendor hooks still absent (75 config options), sensor drivers
+  missing, camera sensor drivers missing
+
+### Next Steps
+- This candidate should be tested by the orchestrator
+- If display lights up but boot still fails: the remaining TRAN_* hooks + sensors need porting
+- Additional drivers can be ported from Vivo Y81/Y3s and Nokia MT6771 trees
+
+### Status: >>> READY FOR TEST: boot_candidates/boot_C_lcm.img — first build with LCM panel driver <<<

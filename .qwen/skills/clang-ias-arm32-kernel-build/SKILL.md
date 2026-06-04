@@ -146,7 +146,11 @@ When a directory has too many legacy .S files, add `asflags-y += -fno-integrated
 - **TEEI version mismatch:** Config says `MICROTRUST_TEE_VERSION="300"` but source is `drivers/tee/teei/400/`. Fix: `sed -i 's/"300"/"400"/'` in `.config`.
 - **Missing camera sensor dirs:** `CUSTOM_KERNEL_IMGSENSOR` lists sensors whose source dirs don't exist. Trim to only those present.
 - **Missing LCM dirs:** `CUSTOM_KERNEL_LCM` — all may be missing. Set to `""` and comment out `LCM_COMPILE_ASSERT` in `mt65xx_lcm_list.c`.
-- **USB struct members:** `otg_sx` behind `#ifdef CONFIG_MTK_MUSB_DUAL_ROLE` but debugfs code accesses it unconditionally. Guard with same `#ifdef`.
+- **USB struct members (`otg_sx`):** Behind `#ifdef CONFIG_MTK_MUSB_DUAL_ROLE` but debugfs code accesses it unconditionally. Guard with same `#ifdef`.
+- **USB debugfs unused variable (`proc_dr_files`):** In `drivers/misc/mediatek/usb20/musb_debugfs.c`, the `proc_dr_files` array is declared outside the `#ifdef CONFIG_MTK_MUSB_DUAL_ROLE` guard but only used inside it. When the config is disabled, `-Werror,-Wunused-variable` kills the build. Fix: add `__maybe_unused` to the declaration:
+  ```c
+  static struct proc_dir_entry *proc_dr_files[PROC_FILE_DR_NUM] __maybe_unused = {NULL, NULL};
+  ```
 - **`mt_usb_is_device` stub:** When `CONFIG_USB_MTK_HDRC` is disabled, provide `static inline bool mt_usb_is_device(void) { return false; }` in `mtk_musb.h`.
 
 ## Backport API Gaps (4.19 vs newer)
