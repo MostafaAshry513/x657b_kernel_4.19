@@ -453,4 +453,68 @@ The Y81 panel driver was ported into our 4.19 tree under:
 - If display lights up but boot still fails: the remaining TRAN_* hooks + sensors need porting
 - Additional drivers can be ported from Vivo Y81/Y3s and Nokia MT6771 trees
 
-### Status: >>> READY FOR TEST: boot_candidates/boot_C_lcm.img — first build with LCM panel driver <<<
+### Status: ❌ BOOT ABORTED — cmdline overflow in LK bootloader (see candidate D below).
+
+---
+
+## 2026-06-04 CMDLINE OVERFLOW FIX — CANDIDATES D1/D2/D3
+
+### Root Cause of Candidate C Boot Abort
+- LK bootloader printed "cmdline overflow" and rebooted — kernel never ran
+- **Header cmdline** (40 chars: `bootopt=64S3,32S1,32S1 buildvariant=user`) is fine
+- **From-source DTB `/chosen/bootargs`** contains a long debug string with literal TAB chars:
+  ```
+  console=tty0 console=ttyS0,921600n1 vmalloc=400M slub_debug=OFZPU page_owner=on swiotlb=noforce cgroup.memory=nosocket,nokmem androidboot.hardware=mt6761 maxcpus=8 loop.max_part=7 firmware_class.path=/vendor/firmware
+  ```
+- When LK reads this DTB from the boot image (header v2, dtb_size > 0), it appends
+  LK's runtime `androidboot.*` args and overflows the fixed-size cmdline buffer.
+- Stock boot image works because `dtb_size=0` — LK loads DTB from the separate
+  `/dev/block/platform/bootdevice/by-name/dtb` partition, not from the boot image.
+
+### Stock DTB Investigation
+- Extracted DTB from `boot_orig_backup.img` at offset 11495488 (125,101 bytes, FDT magic verified)
+- **Stock DTB has identical long debug bootargs** as our from-source DTB
+- The stock DTB in the boot partition dump is NOT the same as the dtb partition DTB
+  that LK actually loads; it's a remnant/copy that LK ignores (dtb_size=0)
+- Conclusion: the stock DTB from boot_orig_backup.img WILL NOT prevent cmdline overflow
+
+### Fix Strategy — Three Candidates
+
+| Candidate | File | Header | DTB | Rationale |
+|-----------|------|--------|-----|-----------|
+| **D1** | `boot_D1_no_dtb.img` | v1 | **None** | Let LK use dtb partition (matches stock behavior) |
+| **D2** | `boot_D2_trimmed_dtb.img` | v2 | Trimmed from-source | Minimal bootargs: `console=tty0 androidboot.hardware=mt6761 loop.max_part=7 firmware_class.path=/vendor/firmware` |
+| **D3** | `boot_D3_stock_dtb.img` | v2 | Stock DTB from backup | Correct peripheral node layout (but same long bootargs) |
+
+### DTB Bootargs Trim
+Modified `arch/arm/boot/dts/mt6761.dts` /chosen/bootargs:
+- **Before:** 267 chars with debug flags (`slub_debug=OFZPU page_owner=on swiotlb=noforce cgroup.memory=nosocket,nokmem maxcpus=8`) and literal TABs
+- **After:** 100 chars: `console=tty0 androidboot.hardware=mt6761 loop.max_part=7 firmware_class.path=/vendor/firmware`
+
+### Ramdisk
+All three candidates use the stock ramdisk extracted from `boot_orig_backup.img`
+(921 KB, identical to `/tmp/bu/stock_ramdisk_from_backup`).
+
+### Candidate Details
+
+**D1: No DTB (header v1)**
+- **MD5:** `70f1f10b7cb06c85a8df187bceb7ea00`
+- **Size:** 11,644,928 bytes
+- **zImage:** `ed6531e804bf7415fa2cfe05f2391bf8` (LCM port build)
+- **Best chance:** LK loads DTB from dtb partition = stock DTB with correct peripheral layout
+- **Risk:** LK might not support header v1 on this device
+
+**D2: Trimmed from-source DTB (header v2)**
+- **MD5:** `f13a71673ebd82a8635a7b309e15aaec`
+- **Size:** 11,735,040 bytes
+- **DTB MD5:** trimmed from-source (bootargs=100 chars)
+- **Risk:** from-source DTB has untested peripheral node layout vs stock dtb partition
+
+**D3: Stock DTB from backup (header v2)**
+- **MD5:** `1ec86f4c9aca512cfe01186e293e32d5`
+- **Size:** 11,771,904 bytes
+- **DTB MD5:** stock (125,101 bytes, same long bootargs as original)
+- **Risk:** Same cmdline overflow as candidate C (long bootargs); only useful if LK
+  handles boot-image DTB cmdline differently from dtb-partition cmdline
+
+### Status: >>> READY FOR TEST — Flash D1 first (no DTB), then D2 (trimmed DTB) <<<
