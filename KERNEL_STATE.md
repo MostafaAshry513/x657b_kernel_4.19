@@ -1,9 +1,14 @@
 # KERNEL STATE — read first, UPDATE after every step
 
-**Updated:** 2026-06-05 04:10 UTC
-**CURRENT PHASE:** 2 complete, awaiting flash test of D1r. Phase 4 prep done (KERNEL_READINESS.md written).
+**Updated:** 2026-06-05 05:00 UTC
+**CURRENT PHASE:** 2 complete, awaiting flash test of D1r. Phase 4 prep: stock_config.gz analyzed — TRAN_* mapping complete.
 
 ## LAST RESULT
+- **stock_config.gz analyzed** — 5468 lines from running stock 57e6 kernel.
+  - 39 `CONFIG_TRAN_*` options identified — ALL 39 have NO Kconfig/C source in any public repo.
+  - 11 device-specific MTK configs missing from our tree — 3 exist (USB chain, blocked by build), 8 don't exist.
+  - Full mapping written to KERNEL_KB.md (39 TRAN_* + 11 MTK configs, categorized by function).
+  - Conclusion: ALL TRAN_* hooks are proprietary Transsion code — cannot be ported from any known source.
 - **D1r** built and pushed: `boot_D1r_ramoops_v1.img` (MD5: `37f91c6dcb450edc82dd23c4f3456417`)
 - **KERNEL_READINESS.md** written — comprehensive 12-point risk assessment.
   - ✅ Mitigated: LK acceptance, DTB compat, ramdisk, SELinux, ramoops
