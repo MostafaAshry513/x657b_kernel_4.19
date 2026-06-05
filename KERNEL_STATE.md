@@ -1,43 +1,53 @@
 # KERNEL STATE — read first, UPDATE after every step
 
-**Updated:** 2026-06-05 07:15 UTC
-**CURRENT PHASE:** 1 (cmdline overflow) — D1s and D1s_xz built, awaiting flash test.
+**Updated:** 2026-06-05 09:30 UTC
+**CURRENT PHASE:** 1 (cmdline overflow) — D1s PASSED LK but kernel crashed. D2 candidates built.
 
 ## LAST RESULT
-- **D1r FAILED** — cmdline overflow with NO DTB → DTB-bootargs theory DISPROVED.
-- **D1s built** — stock-identical boot image, ONLY kernel replaced (header v2, dtb_size=0, stock ramdisk).
-  - MD5: `9eb15d77073e41b4a4e59650a897e7f7`
-  - zImage: 10.7 MB (GZIP), same LCM+ramoops kernel
-- **D1s_xz built** — same as D1s but kernel compressed with XZ (7.0 MB, SMALLER than stock's 10.5 MB).
-  - MD5: `87a8afed80bfe30e1a7a7e519e2ec828`
-  - zImage MD5: `6cf907e77f7d5c4867a4f28e9f3d64c8`
-  - XZ decompressor: CONFIG_XZ_DEC_ARM=y, CONFIG_XZ_DEC_ARMTHUMB=y — fully configured
-  - Hypothesis: if cmdline overflow is triggered by kernel size (larger than stock = LK memory layout change),
-    XZ compression (38% smaller than stock) should fix it.
+- **D1s (stock-swap) PASSED LK** — no "cmdline overflow" message. Kernel loaded and crashed before
+  pstore/ramoops init → black screen, no kernel log.
+- **Root cause refined:** Our kernel DOES boot past LK when using header v2. It CRASHES because D1s used
+  the stock dtb partition DTB which has different peripheral HW nodes than our kernel expects.
+  Candidate A (our from-source DTB) previously booted to userspace with the same kernel.
 
-## Theory: Cmdline overflow may be kernel-size-dependent
-- Stock kernel: 10.5 MB → works
-- D1r kernel: 10.7 MB (GZIP) → overflowed (header v1)
-- D1s kernel: 10.7 MB (GZIP) → to test (header v2, if smaller header → might work)
-- D1s_xz kernel: 7.0 MB (XZ) → to test (38% smaller than stock)
-- If D1s overflows but D1s_xz doesn't → kernel size affects LK memory layout → overflow
-- If both overflow → something else in kernel content triggers it
-- If D1s works → header v1 was the issue (not kernel size)
+## Theory
+- Header v2 with our DTB = kernel matches HW nodes → boots (candidate A evidence)
+- Header v2 with stock DTB = HW node mismatch → kernel panics early (D1s evidence)
+- Header v1 with no DTB = LK treats v1 differently → cmdline overflow (D1r evidence)
 
-## NEXT ACTIONS
-1. **Flash D1s first.** If it works → header v1 was unsupported. Proceed to Phase 3.
-2. **If D1s overflows:** Flash D1s_xz. If it works → kernel size was the issue.
-3. **If both overflow:** The trigger is inside the kernel binary content (not size, not header).
-   Investigate kernel configuration differences that LK might scan.
+## Fix
+Use header v2 + our from-source DTB with TRIMMED bootargs (99 chars, no debug flags or TABs).
+The trimmed DTB includes ramoops at 0x47E80000 for boot diagnostics.
 
-## PENDING TEST REQUESTS
+## Candidates Ready for Test
 
-### Test A — D1s
-**File:** `boot_candidates/boot_D1s_stock_swap.img`
-**MD5:** `9eb15d77073e41b4a4e59650a897e7f7`
-**Test:** Does header v2 with dtb_size=0 pass LK when everything else is stock?
+### D2s_gz — GZIP kernel + trimmed DTB + stock ramdisk
+- **File:** `boot_candidates/boot_D2s_gz.img`
+- **MD5:** `111d8765452685fc520a04ab41b39c0a`
+- **zImage:** GZIP, 10.7 MB (MD5: `6c718669e2b3167f4e79887c1a0d248c`)
+- **DTB:** trimmed (99-char bootargs, ramoops at 0x47E80000)
+- **Ramdisk:** stock from boot_orig_backup.img
+- **Features:** LCM panel driver + ramoops
 
-### Test B — D1s_xz (if D1s fails)
-**File:** `boot_candidates/boot_D1s_xz.img`
-**MD5:** `87a8afed80bfe30e1a7a7e519e2ec828`
-**Test:** Does a smaller kernel (XZ, 7.0 MB) avoid the cmdline overflow?
+### D2s_xz — XZ kernel + trimmed DTB + stock ramdisk
+- **File:** `boot_candidates/boot_D2s_xz.img`
+- **MD5:** `670616eb583d749e27607ea8ca384b6d`
+- **zImage:** XZ, 7.0 MB (MD5: `7a51e946309655bb2d41696936b50271`)
+- **DTB:** same trimmed DTB
+- **Ramdisk:** stock from boot_orig_backup.img
+- **Features:** LCM panel driver + ramoops, 38% smaller than stock kernel
+
+## PENDING TEST REQUEST
+Flash D2s_gz first (GZIP is standard, matches candidate A which booted to userspace).
+If D2s_gz fails, flash D2s_xz.
+
+**Both candidates:** header v2, our DTB (compatible HW nodes), trimmed bootargs (no overflow risk),
+stock ramdisk, ramoops at 0x47E80000.
+
+**Observe:**
+1. Does LK pass? (no "cmdline overflow")
+2. Does kernel boot? Display? ADB?
+3. If stall/fail: capture `/sys/fs/pstore/console-ramoops` from TWRP — this is the critical log
+4. If boot_completed: ADB shell available, kernel is working
+
+**Recovery:** flash stock boot_orig_backup.img
