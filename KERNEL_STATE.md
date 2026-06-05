@@ -1,45 +1,35 @@
 # KERNEL STATE — read first, UPDATE after every step
 
-**Updated:** 2026-06-05 05:00 UTC
-**CURRENT PHASE:** 2 complete, awaiting flash test of D1r. Phase 4 prep: stock_config.gz analyzed — TRAN_* mapping complete.
+**Updated:** 2026-06-05 06:20 UTC
+**CURRENT PHASE:** 1 (cmdline overflow) — RE-OPENED. D1r failed with same "cmdline overflow" as C.
 
 ## LAST RESULT
-- **stock_config.gz analyzed** — 5468 lines from running stock 57e6 kernel.
-  - 39 `CONFIG_TRAN_*` options identified — ALL 39 have NO Kconfig/C source in any public repo.
-  - 11 device-specific MTK configs missing from our tree — 3 exist (USB chain, blocked by build), 8 don't exist.
-  - Full mapping written to KERNEL_KB.md (39 TRAN_* + 11 MTK configs, categorized by function).
-  - Conclusion: ALL TRAN_* hooks are proprietary Transsion code — cannot be ported from any known source.
-- **D1r** built and pushed: `boot_D1r_ramoops_v1.img` (MD5: `37f91c6dcb450edc82dd23c4f3456417`)
-- **KERNEL_READINESS.md** written — comprehensive 12-point risk assessment.
-  - ✅ Mitigated: LK acceptance, DTB compat, ramdisk, SELinux, ramoops
-  - ✅ Already present: touchscreen (NT36572), sensors, charger/PMIC
-  - ⚠️ Ported untested: LCM panel driver
-  - ❌ Cannot fix: TRAN_* vendor hooks (proprietary, no source), USB QMU (build broken)
-- **Touch/sensor/config gaps analyzed:** Touchscreen NT36572 already compiled in. Sensor configs match stock.
-  Charger/PMIC configs match. USB_MTK_HDRC build-broken, MUSB_QMU depends on it. No remaining
-  config options from stock can be enabled without Kconfig/source additions.
+- **D1r FAILED** on real device: LK printed "cmdline overflow" — identical to candidate C.
+  - D1r had NO DTB (header v1) and STILL overflowed.
+  - **This disproves the DTB-bootargs theory.** The overflow source is elsewhere.
+- **New hypothesis:** Header v1 may not be properly supported by MTK LK on mt6761.
+  - Stock uses header v2, dtb_size=0 → works.
+  - D1r uses header v1 → overflows (same 40-char cmdline).
+  - Maybe LK reads v2-specific fields at wrong offsets in v1, gets garbage, causes overflow.
 
-## NEXT ACTION (build-side work — do NOT flash)
-1. **Await D1r flash test result.** The orchestrator will flash D1r and report:
-   - LK acceptance? display? adb? boot_completed?
-   - If fail: pstore console-ramoops output (this is the key — it tells us exactly where it stalls)
-2. **While waiting, continue porting:** Camera sensor drivers from Vivo Y81 (s5k3l6xx → s5k3l6ext2 adaptation).
-   Low priority (camera not needed for boot) but moves us toward Phase 5.
-3. **Investigate USB_MTK_HDRC struct fix** — can we add the missing .phy member to mt_usb_glue?
-   Search for the struct definition and see if it's a simple addition or a major refactor.
+## NEXT ACTION
+1. **Test D1s** — stock-identical boot image with ONLY the kernel replaced.
+   - Header v2, byte-copied from stock (cmdline, os_version, name, offsets)
+   - dtb_size=0, dtbo_size=0
+   - Stock ramdisk
+   - Our from-source zImage (with LCM panel driver + ramoops)
+   - This is the ABSOLUTE MINIMAL DIFF from the known-good stock boot.
+2. **If D1s also overflows:** The overflow is triggered by something IN the kernel image
+   itself (not the header). Investigate: kernel size, decompressor format, appended data.
+3. **If D1s boots past LK:** Header v1 was the issue. All future candidates use header v2.
 
-## PENDING TEST REQUEST — D1r
-**Candidate:** `boot_candidates/boot_D1r_ramoops_v1.img`
-**MD5:** `37f91c6dcb450edc82dd23c4f3456417`
-**zImage MD5:** `c5d5c65f9b6c2f0ee558ebb20d1ffb10`
+## PENDING TEST REQUEST — D1s
+**Candidate:** `boot_candidates/boot_D1s_stock_swap.img`
+**MD5:** `9eb15d77073e41b4a4e59650a897e7f7`
+**zImage MD5:** `c5d5c65f9b6c2f0ee558ebb20d1ffb10` (same LCM+ramoops kernel as D1r)
 **Flash to:** boot partition
 **Observe:**
-1. Does LK accept header v1? (no "cmdline overflow", no abort → kernel starts loading)
-2. Does display light up? (kernel LCM driver initializes the panel)
-3. Does adb come up? (`adb devices`, `adb shell`)
-4. If adb: `getprop sys.boot_completed` → 1?
-5. If boot fails/stalls: reboot to TWRP, capture:
-   - `cat /sys/fs/pstore/console-ramoops` (THE CRITICAL ONE)
-   - `cat /proc/last_kmsg`
-   - Paste both outputs here
-**Recovery:** flash stock boot_orig_backup.img if it fails
+1. Does LK boot past cmdline? Kernel starts loading?
+2. If same "cmdline overflow": the trigger is inside our zImage — not header, not DTB.
+3. If boots: header v1 was the problem. Proceed to Phase 3/4.
+**Recovery:** flash stock boot_orig_backup.img
