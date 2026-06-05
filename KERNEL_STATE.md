@@ -1,35 +1,43 @@
 # KERNEL STATE — read first, UPDATE after every step
 
-**Updated:** 2026-06-05 06:20 UTC
-**CURRENT PHASE:** 1 (cmdline overflow) — RE-OPENED. D1r failed with same "cmdline overflow" as C.
+**Updated:** 2026-06-05 07:15 UTC
+**CURRENT PHASE:** 1 (cmdline overflow) — D1s and D1s_xz built, awaiting flash test.
 
 ## LAST RESULT
-- **D1r FAILED** on real device: LK printed "cmdline overflow" — identical to candidate C.
-  - D1r had NO DTB (header v1) and STILL overflowed.
-  - **This disproves the DTB-bootargs theory.** The overflow source is elsewhere.
-- **New hypothesis:** Header v1 may not be properly supported by MTK LK on mt6761.
-  - Stock uses header v2, dtb_size=0 → works.
-  - D1r uses header v1 → overflows (same 40-char cmdline).
-  - Maybe LK reads v2-specific fields at wrong offsets in v1, gets garbage, causes overflow.
+- **D1r FAILED** — cmdline overflow with NO DTB → DTB-bootargs theory DISPROVED.
+- **D1s built** — stock-identical boot image, ONLY kernel replaced (header v2, dtb_size=0, stock ramdisk).
+  - MD5: `9eb15d77073e41b4a4e59650a897e7f7`
+  - zImage: 10.7 MB (GZIP), same LCM+ramoops kernel
+- **D1s_xz built** — same as D1s but kernel compressed with XZ (7.0 MB, SMALLER than stock's 10.5 MB).
+  - MD5: `87a8afed80bfe30e1a7a7e519e2ec828`
+  - zImage MD5: `6cf907e77f7d5c4867a4f28e9f3d64c8`
+  - XZ decompressor: CONFIG_XZ_DEC_ARM=y, CONFIG_XZ_DEC_ARMTHUMB=y — fully configured
+  - Hypothesis: if cmdline overflow is triggered by kernel size (larger than stock = LK memory layout change),
+    XZ compression (38% smaller than stock) should fix it.
 
-## NEXT ACTION
-1. **Test D1s** — stock-identical boot image with ONLY the kernel replaced.
-   - Header v2, byte-copied from stock (cmdline, os_version, name, offsets)
-   - dtb_size=0, dtbo_size=0
-   - Stock ramdisk
-   - Our from-source zImage (with LCM panel driver + ramoops)
-   - This is the ABSOLUTE MINIMAL DIFF from the known-good stock boot.
-2. **If D1s also overflows:** The overflow is triggered by something IN the kernel image
-   itself (not the header). Investigate: kernel size, decompressor format, appended data.
-3. **If D1s boots past LK:** Header v1 was the issue. All future candidates use header v2.
+## Theory: Cmdline overflow may be kernel-size-dependent
+- Stock kernel: 10.5 MB → works
+- D1r kernel: 10.7 MB (GZIP) → overflowed (header v1)
+- D1s kernel: 10.7 MB (GZIP) → to test (header v2, if smaller header → might work)
+- D1s_xz kernel: 7.0 MB (XZ) → to test (38% smaller than stock)
+- If D1s overflows but D1s_xz doesn't → kernel size affects LK memory layout → overflow
+- If both overflow → something else in kernel content triggers it
+- If D1s works → header v1 was the issue (not kernel size)
 
-## PENDING TEST REQUEST — D1s
-**Candidate:** `boot_candidates/boot_D1s_stock_swap.img`
+## NEXT ACTIONS
+1. **Flash D1s first.** If it works → header v1 was unsupported. Proceed to Phase 3.
+2. **If D1s overflows:** Flash D1s_xz. If it works → kernel size was the issue.
+3. **If both overflow:** The trigger is inside the kernel binary content (not size, not header).
+   Investigate kernel configuration differences that LK might scan.
+
+## PENDING TEST REQUESTS
+
+### Test A — D1s
+**File:** `boot_candidates/boot_D1s_stock_swap.img`
 **MD5:** `9eb15d77073e41b4a4e59650a897e7f7`
-**zImage MD5:** `c5d5c65f9b6c2f0ee558ebb20d1ffb10` (same LCM+ramoops kernel as D1r)
-**Flash to:** boot partition
-**Observe:**
-1. Does LK boot past cmdline? Kernel starts loading?
-2. If same "cmdline overflow": the trigger is inside our zImage — not header, not DTB.
-3. If boots: header v1 was the problem. Proceed to Phase 3/4.
-**Recovery:** flash stock boot_orig_backup.img
+**Test:** Does header v2 with dtb_size=0 pass LK when everything else is stock?
+
+### Test B — D1s_xz (if D1s fails)
+**File:** `boot_candidates/boot_D1s_xz.img`
+**MD5:** `87a8afed80bfe30e1a7a7e519e2ec828`
+**Test:** Does a smaller kernel (XZ, 7.0 MB) avoid the cmdline overflow?
