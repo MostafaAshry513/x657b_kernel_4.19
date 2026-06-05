@@ -5,8 +5,26 @@
 - **MD5:** 062294031caf668c0df8b1a962aae52c
 - **Flash:** boot partition
 - **Result:** MTK LK printed "cmdline overflow" and rebooted — kernel never ran
-- **Root cause:** From-source DTB /chosen/bootargs (267 chars debug + TABs) overflowed LK cmdline buffer
-- **Conclusion:** DTB-packed-in-boot-image path broken. Fix: no DTB in boot image (header v1) or trimmed DTB.
+- **Root cause (INITIAL — LATER DISPROVED):** From-source DTB /chosen/bootargs (267 chars) overflowed LK cmdline buffer
+- **Conclusion:** DTB-packed-in-boot-image path broken. Fix: no DTB in boot image.
+
+## Test 2 — Candidate D1r (boot_D1r_ramoops_v1.img)
+- **Date:** 2026-06-05
+- **MD5:** 37f91c6dcb450edc82dd23c4f3456417
+- **Flash:** boot partition
+- **Result:** LK printed "cmdline overflow" — IDENTICAL to candidate C
+- **Root cause REVISED:** D1r had NO DTB (header v1). This DISPROVES the DTB-bootargs theory.
+  Cmdline overflow is NOT caused by the boot-image DTB. Source is elsewhere.
+- **New hypothesis:** Header v1 not properly supported by MTK LK on mt6761 → LK reads wrong offsets.
+
+## Test 3 — PENDING: D1s (boot_D1s_stock_swap.img)
+- **MD5:** 9eb15d77073e41b4a4e59650a897e7f7
+- **zImage MD5:** c5d5c65f9b6c2f0ee558ebb20d1ffb10
+- **Features:** Stock-identical boot image (header v2, byte-copied cmdline/os_version/name,
+  dtb_size=0, dtbo_size=0, stock ramdisk) with ONLY the kernel replaced by our from-source zImage.
+  Absolute minimal diff from known-good stock boot.
+- **Test:** If this overflows → trigger is inside our zImage, not the header.
+  If this boots past LK → header v1 was the issue.
 
 ## Test 2 — PENDING: D1r (boot_D1r_ramoops_v1.img)
 - **MD5:** 37f91c6dcb450edc82dd23c4f3456417
