@@ -517,4 +517,43 @@ All three candidates use the stock ramdisk extracted from `boot_orig_backup.img`
 - **Risk:** Same cmdline overflow as candidate C (long bootargs); only useful if LK
   handles boot-image DTB cmdline differently from dtb-partition cmdline
 
-### Status: >>> READY FOR TEST — Flash D1 first (no DTB), then D2 (trimmed DTB) <<<
+### Status: >>> READY FOR TEST — D1r (no DTB + ramoops) preferred over D1/D2/D3 <<<
+
+---
+
+## 2026-06-05 PHASE 2 — DIAGNOSTIC VISIBILITY (ramoops/pstore)
+
+### Ramoops Configuration
+- Added `ramoops@47E80000` node to `arch/arm/boot/dts/mt6761.dts`:
+  - Address: 0x47E80000 (standard MT6761 ram_console address)
+  - Size: 0x100000 (1 MB)
+  - Sub-buffers: console (128KB), record/panic (128KB), ftrace (128KB), pmsg (128KB)
+- `CONFIG_PSTORE_RAM=y` and `CONFIG_PSTORE_CONSOLE=y` already present in both stock and our config
+- Stock DTB has NO ramoops node — LK passes it via runtime parameters; our DTS add provides equivalent
+- After any boot (success or failure), kernel log is readable at `/sys/fs/pstore/console-ramoops`
+
+### LK Header Version Analysis
+- Stock boot: header v2, dtb_size=0 → LK uses dtb partition
+- mkbootimg.py enforces dtb_size > 0 for header v2 → cannot directly replicate stock's dtb_size=0
+- **Solution:** Use header v1 (no DTB section) — achieves same effect: LK falls back to dtb partition
+- Risk: LK must support v1; v1 is a valid boot image header version and widely supported on MTK
+
+### Candidate D1r — Ramoops + No DTB
+- **File:** `boot_candidates/boot_D1r_ramoops_v1.img` (11.6 MB)
+- **MD5:** `37f91c6dcb450edc82dd23c4f3456417`
+- **zImage MD5:** `c5d5c65f9b6c2f0ee558ebb20d1ffb10`
+- **Header:** v1 (no DTB section → LK falls back to dtb partition)
+- **Kernel:** LCM panel driver + ramoops in DTS
+- **Ramdisk:** stock from `boot_orig_backup.img`
+- **Bootargs:** minimal (40 chars) — no overflow risk
+- **PSTORE:** If kernel reaches pstore init, logs survive reboots in `/sys/fs/pstore/console-ramoops`
+
+### CONFIG_TRAN_* Investigation
+- 75 TRAN_* config symbols exist in stock config but have **NO Kconfig/C source in ANY public repo**
+- Checked: Vivo Y81 (MT6765), Nokia MT6771, Oppo A3 (MT6763) — none have TRAN_ hooks
+- TRAN_* symbols appear ONLY in ikconfig dumps — they are proprietary Transsion code never released
+- Status: CANNOT BE PORTED — no source exists. Kernel will boot without them; vendor HALs expecting
+  their sysfs/proc entries may fail gracefully or produce warnings.
+
+### Status: >>> READY FOR TEST — boot_candidates/boot_D1r_ramoops_v1.img (MD5: 37f91c6dc...) <<<
+### Test: Flash to boot; if fails, capture /sys/fs/pstore/console-ramoops from TWRP
